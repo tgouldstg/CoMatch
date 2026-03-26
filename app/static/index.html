@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Company Match API UI</title>
+  <style>
+    body { font-family: Inter, Arial, sans-serif; margin: 24px; max-width: 1200px; color: #0f172a; }
+    h1 { margin-bottom: 8px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 16px; }
+    textarea, input, button, select { width: 100%; box-sizing: border-box; margin-top: 8px; }
+    textarea { min-height: 220px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    button { padding: 10px 12px; cursor: pointer; }
+    .muted { color: #555; font-size: 0.92rem; }
+    pre { background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 8px; overflow: auto; }
+    .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    .row4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; }
+
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.92rem; }
+    th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #f8fafc; }
+    .badge { padding: 3px 8px; border-radius: 999px; font-size: 0.78rem; font-weight: 600; display: inline-block; }
+    .d-auto_accept { background: #dcfce7; color: #166534; }
+    .d-review { background: #fef9c3; color: #854d0e; }
+    .d-reject { background: #fee2e2; color: #991b1b; }
+    .score-high { color: #166534; font-weight: 700; }
+    .score-mid { color: #854d0e; font-weight: 700; }
+    .score-low { color: #991b1b; font-weight: 700; }
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .toolbar button { width: auto; }
+  </style>
+</head>
+<body>
+  <h1>Company Match API UI</h1>
+  <p class="muted">Login required. Use JSON mode or CSV upload mode after authenticating.</p>
+
+  <div class="card" style="margin-bottom: 20px;">
+    <h2>Login</h2>
+    <div class="row">
+      <div>
+        <label>Username</label>
+        <input id="username" type="text" value="admin" />
+      </div>
+      <div>
+        <label>Password</label>
+        <input id="password" type="password" value="change-me-now" />
+      </div>
+      <div style="display:flex;align-items:end;">
+        <button id="loginBtn">Login</button>
+      </div>
+    </div>
+    <div class="toolbar">
+      <button id="checkSessionBtn">Check Session</button>
+      <button id="logoutBtn">Logout</button>
+    </div>
+    <div id="authStatus" class="muted" style="margin-top:8px;">Not logged in.</div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>JSON Match</h2>
+      <p class="muted">Paste request body for <code>POST /match</code>.</p>
+      <textarea id="jsonInput">{
+  "left": [
+    {"id": "l1", "name": "Acme Holdings LLC", "website": "acme.com", "country": "US"}
+  ],
+  "right": [
+    {"id": "r1", "name": "ACME Holding Co.", "website": "acme.com", "country": "US"},
+    {"id": "r2", "name": "Globex International Ltd", "website": "globex.com", "country": "US"}
+  ],
+  "options": {"top_k": 3, "auto_accept_threshold": 0.92, "review_threshold": 0.75}
+}</textarea>
+      <button id="jsonBtn">Run JSON Match</button>
+    </div>
+
+    <div class="card">
+      <h2>CSV Match</h2>
+      <p class="muted">Upload two CSV files for <code>POST /match/csv</code>.</p>
+      <label>Left CSV</label>
+      <input id="leftFile" type="file" accept=".csv,text/csv" />
+      <label>Right CSV</label>
+      <input id="rightFile" type="file" accept=".csv,text/csv" />
+
+      <div class="row">
+        <div>
+          <label>Top K</label>
+          <input id="topK" type="number" value="3" min="1" max="10" />
+        </div>
+        <div>
+          <label>Auto Accept</label>
+          <input id="autoAccept" type="number" step="0.01" value="0.92" min="0" max="1" />
+        </div>
+        <div>
+          <label>Review</label>
+          <input id="review" type="number" step="0.01" value="0.75" min="0" max="1" />
+        </div>
+      </div>
+
+      <button id="csvBtn">Run CSV Match</button>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top: 20px;">
+    <h2>Match Table</h2>
+    <div class="row4">
+      <div>
+        <label>Filter Decision</label>
+        <select id="decisionFilter">
+          <option value="all">All</option>
+          <option value="auto_accept">Auto Accept</option>
+          <option value="review">Review</option>
+          <option value="reject">Reject</option>
+          <option value="review_or_reject">Review + Reject</option>
+        </select>
+      </div>
+      <div>
+        <label>Min Confidence</label>
+        <input id="minConfidence" type="number" min="0" max="1" step="0.01" value="0" />
+      </div>
+      <div>
+        <label>Contains (left or right name)</label>
+        <input id="nameFilter" type="text" placeholder="acme" />
+      </div>
+      <div>
+        <label>Rows</label>
+        <div class="toolbar">
+          <button id="applyFiltersBtn">Apply Filters</button>
+          <button id="clearFiltersBtn">Clear</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toolbar" style="margin-top: 12px;">
+      <button id="downloadCsvBtn">Download Visible Rows CSV</button>
+      <button id="downloadJsonBtn">Download Full JSON</button>
+    </div>
+
+    <div id="summary" class="muted" style="margin-top: 10px;">No results yet.</div>
+    <div style="overflow:auto; max-height: 420px; margin-top: 10px;">
+      <table id="resultsTable">
+        <thead>
+          <tr>
+            <th>Left ID</th>
+            <th>Left Name</th>
+            <th>Best Match ID</th>
+            <th>Best Match Name</th>
+            <th>Confidence</th>
+            <th>Decision</th>
+            <th>Alternatives</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top: 20px;">
+    <h2>Raw JSON</h2>
+    <pre id="result">(no result yet)</pre>
+  </div>
+
+  <script>
+    const resultEl = document.getElementById('result');
+    const tbody = document.querySelector('#resultsTable tbody');
+    const summaryEl = document.getElementById('summary');
+    const authStatus = document.getElementById('authStatus');
+
+    let fullResponse = null;
+    let visibleRows = [];
+
+    function setResult(data) { resultEl.textContent = JSON.stringify(data, null, 2); }
+    function getToken() { return localStorage.getItem('cm_api_token') || ''; }
+    function setToken(t) { localStorage.setItem('cm_api_token', t); }
+    function clearToken() { localStorage.removeItem('cm_api_token'); }
+
+    async function apiFetch(url, opts = {}) {
+      const token = getToken();
+      const headers = new Headers(opts.headers || {});
+      if (token) headers.set('Authorization', `Bearer ${token}`);
+      const res = await fetch(url, { ...opts, headers });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw data;
+      return data;
+    }
+
+    async function login() {
+      try {
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        const data = await apiFetch('/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        setToken(data.access_token);
+        authStatus.textContent = `Logged in as ${username}`;
+      } catch (err) {
+        authStatus.textContent = `Login failed: ${err?.detail || JSON.stringify(err)}`;
+      }
+    }
+
+    async function checkSession() {
+      try {
+        const me = await apiFetch('/auth/me');
+        authStatus.textContent = `Session valid. Logged in as ${me.username}`;
+      } catch {
+        authStatus.textContent = 'Not authenticated or token expired.';
+      }
+    }
+
+    function logout() {
+      clearToken();
+      authStatus.textContent = 'Logged out.';
+    }
+
+    function scoreClass(v) { if (v >= 0.92) return 'score-high'; if (v >= 0.75) return 'score-mid'; return 'score-low'; }
+    function esc(s) { return String(s ?? '').replace(/[&<>'\"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c])); }
+
+    function renderTable(rows) {
+      tbody.innerHTML = '';
+      for (const r of rows) {
+        const best = r.best_match || {};
+        const alt = (r.alternatives || []).map(a => `${a.id} (${a.confidence})`).join(', ');
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${esc(r.left_id)}</td>
+          <td>${esc(r.left_name)}</td>
+          <td>${esc(best.id || '')}</td>
+          <td>${esc(best.name || '')}</td>
+          <td class="${scoreClass(Number(best.confidence || 0))}">${best.confidence ?? ''}</td>
+          <td><span class="badge d-${esc(r.decision)}">${esc(r.decision)}</span></td>
+          <td>${esc(alt)}</td>`;
+        tbody.appendChild(tr);
+      }
+    }
+
+    function applyFilters() {
+      if (!fullResponse?.results) return;
+      const decision = document.getElementById('decisionFilter').value;
+      const minConf = Number(document.getElementById('minConfidence').value || 0);
+      const q = (document.getElementById('nameFilter').value || '').trim().toLowerCase();
+      visibleRows = fullResponse.results.filter(r => {
+        const conf = Number(r?.best_match?.confidence || 0);
+        const lname = String(r.left_name || '').toLowerCase();
+        const rname = String(r?.best_match?.name || '').toLowerCase();
+        const decisionOk = decision === 'all' ? true : decision === 'review_or_reject' ? (r.decision === 'review' || r.decision === 'reject') : r.decision === decision;
+        return decisionOk && conf >= minConf && (q ? (lname.includes(q) || rname.includes(q)) : true);
+      });
+      renderTable(visibleRows);
+      summaryEl.textContent = `Showing ${visibleRows.length} / ${fullResponse.results.length} rows | Summary: ${JSON.stringify(fullResponse.summary)}`;
+    }
+
+    function toCsv(rows) {
+      const headers = ['left_id','left_name','best_match_id','best_match_name','confidence','decision','alternatives'];
+      const lines = [headers.join(',')];
+      for (const r of rows) {
+        const best = r.best_match || {};
+        const alt = (r.alternatives || []).map(a => `${a.id}:${a.confidence}`).join('|');
+        const values = [r.left_id, r.left_name, best.id || '', best.name || '', best.confidence ?? '', r.decision, alt].map(v => {
+          const s = String(v ?? '');
+          return (s.includes(',') || s.includes('"') || s.includes('\n')) ? '"' + s.replaceAll('"', '""') + '"' : s;
+        });
+        lines.push(values.join(','));
+      }
+      return lines.join('\n');
+    }
+
+    function downloadBlob(filename, content, mime) {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
+    }
+
+    async function handleJsonMatch() {
+      try {
+        const body = JSON.parse(document.getElementById('jsonInput').value);
+        const data = await apiFetch('/match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        fullResponse = data; setResult(data); applyFilters();
+      } catch (err) { setResult({ error: err?.detail || err?.message || err }); }
+    }
+
+    async function handleCsvMatch() {
+      try {
+        const left = document.getElementById('leftFile').files[0];
+        const right = document.getElementById('rightFile').files[0];
+        if (!left || !right) throw new Error('Please upload both CSV files.');
+        const form = new FormData();
+        form.append('left_file', left); form.append('right_file', right);
+        form.append('top_k', document.getElementById('topK').value);
+        form.append('auto_accept_threshold', document.getElementById('autoAccept').value);
+        form.append('review_threshold', document.getElementById('review').value);
+        const data = await apiFetch('/match/csv', { method: 'POST', body: form });
+        fullResponse = data; setResult(data); applyFilters();
+      } catch (err) { setResult({ error: err?.detail || err?.message || err }); }
+    }
+
+    document.getElementById('loginBtn').addEventListener('click', login);
+    document.getElementById('checkSessionBtn').addEventListener('click', checkSession);
+    document.getElementById('logoutBtn').addEventListener('click', logout);
+    document.getElementById('jsonBtn').addEventListener('click', handleJsonMatch);
+    document.getElementById('csvBtn').addEventListener('click', handleCsvMatch);
+    document.getElementById('applyFiltersBtn').addEventListener('click', applyFilters);
+    document.getElementById('clearFiltersBtn').addEventListener('click', () => {
+      document.getElementById('decisionFilter').value = 'all';
+      document.getElementById('minConfidence').value = '0';
+      document.getElementById('nameFilter').value = '';
+      applyFilters();
+    });
+    document.getElementById('downloadCsvBtn').addEventListener('click', () => {
+      if (!visibleRows.length) return alert('No visible rows to download yet.');
+      downloadBlob('match-results.csv', toCsv(visibleRows), 'text/csv;charset=utf-8');
+    });
+    document.getElementById('downloadJsonBtn').addEventListener('click', () => {
+      if (!fullResponse) return alert('No results to download yet.');
+      downloadBlob('match-results.json', JSON.stringify(fullResponse, null, 2), 'application/json');
+    });
+
+    if (getToken()) checkSession();
+  </script>
+</body>
+</html>
